@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PantryChef</title>
+
+<script>
+  // ─────────────────────────────────────────────────────────────
+  //  API ADAPTER
+  //  Calls our own server at /api/suggest — the server holds the
+  //  API key so it never appears in the browser or on GitHub.
+  //
+  //  No configuration needed here. Set GROQ_API_KEY in your .env
+  // ─────────────────────────────────────────────────────────────
+  async function callAI(prompt) {
+    const res = await fetch("/api/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return JSON.parse(data.text.replace(/```json|```/g, "").trim());
+  }
+</script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #FAFAF8;
+    --bg2: #F2F1ED;
+    --bg3: #E8E7E2;
+    --text: #1C1B18;
+    --text2: #6B6860;
+    --text3: #9B9890;
+    --border: #E0DED8;
+    --border2: #CCCAC3;
+    --accent: #7F77DD;
+    --accent-light: #EEEDFE;
+    --accent-mid: #AFA9EC;
+    --accent-dark: #3C3489;
+    --green: #1D9E75;
+    --green-light: #EAF3DE;
+    --green-text: #3B6D11;
+    --amber: #EF9F27;
+    --amber-light: #FAEEDA;
+    --amber-text: #633806;
+    --red: #E24B4A;
+    --red-light: #FCEBEB;
+    --red-text: #A32D2D;
+    --blue-light: #E6F1FB;
+    --blue-text: #185FA5;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 12px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0 8px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+  .logo-icon { font-size: 22px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text2);
+    font-size: 13.5px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+    transition: background .12s, color .12s;
+  }
+  .nav-btn:hover { background: var(--bg3); color: var(--text); }
+  .nav-btn.active {
+    background: var(--bg);
+    color: var(--text);
+    font-weight: 500;
+    border-color: var(--border);
+  }
+  .nav-icon { font-size: 16px; flex-shrink: 0; }
+  .nav-badge {
+    margin-left: auto;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 20px;
+    background: var(--amber-light);
+    color: var(--amber-text);
+    font-weight: 500;
+  }
+  .sidebar-footer {
+    font-size: 11px;
+    color: var(--text3);
+    padding: 10px 10px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+
+  /* ── Main ── */
+  .main { display: flex; flex-direction: column; }
+  .topbar {
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .topbar h1 { font-size: 17px; font-weight: 600; flex: 1; }
+  .pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--bg2);
+    color: var(--text2);
+    border: 1px solid var(--border);
+  }
+  .content { padding: 18px 24px; flex: 1; }
+
+  /* ── Chips ── */
+  .chip-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 16px; }
+  .chip {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    cursor: pointer;
+    background: transparent;
+    transition: background .1s, color .1s, border-color .1s;
+  }
+  .chip:hover { background: var(--bg2); }
+  .chip.on { background: var(--accent-light); color: var(--accent-dark); border-color: var(--accent-mid); font-weight: 500; }
+
+  /* ── Suggest bar ── */
+  .suggest-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .section-label { font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 9px; margin-top: 4px; }
+  .suggest-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--accent-mid);
+    background: var(--accent-light);
+    color: var(--accent-dark);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .12s;
+    white-space: nowrap;
+  }
+  .suggest-btn:hover:not(:disabled) { background: #DEDCFB; }
+  .suggest-btn:disabled { border-color: var(--border); background: var(--bg2); color: var(--text3); cursor: default; }
+
+  .search-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+  .search-wrap { position: relative; flex: 1; }
+  .search-wrap input {
+    width: 100%;
+    font-size: 13px;
+    padding: 8px 11px 8px 34px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+    transition: border-color .12s;
+  }
+  .search-wrap input:focus { outline: none; border-color: var(--accent-mid); }
+  .search-icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 15px; pointer-events: none; color: var(--text3);
+  }
+  .search-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text3); font-size: 16px; line-height: 1; padding: 0;
+  }
+  .search-clear:hover { color: var(--text); }
+
+  /* ── Recipe cards ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .card:hover { border-color: var(--accent-mid); box-shadow: 0 2px 8px rgba(127,119,221,.1); }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 5px; }
+  .card-name { font-size: 13.5px; font-weight: 500; line-height: 1.3; }
+  .match-tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+  .tag-full  { background: var(--green-light); color: var(--green-text); }
+  .tag-one   { background: var(--blue-light);  color: var(--blue-text);  }
+  .tag-two   { background: var(--amber-light); color: var(--amber-text); }
+  .tag-three { background: var(--red-light);   color: var(--red-text);   }
+  .missing-note { font-size: 11px; color: var(--text3); margin-bottom: 7px; }
+  .prog-bar { height: 3px; background: var(--bg3); border-radius: 2px; margin: 8px 0 5px; overflow: hidden; }
+  .prog-fill { height: 100%; border-radius: 2px; }
+  .macros { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 2px; }
+  .macro { font-size: 10px; padding: 2px 6px; border-radius: 5px; background: var(--bg2); color: var(--text2); }
+
+  /* ── States ── */
+  .loading-box {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 60px 20px; color: var(--text2);
+  }
+  .spinner {
+    width: 30px; height: 30px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 50px 20px; color: var(--text2); font-size: 13px; }
+  .empty-icon { font-size: 36px; display: block; margin-bottom: 10px; opacity: .4; }
+  .error-box {
+    background: var(--red-light); color: var(--red-text);
+    border: 1px solid #F7C1C1; border-radius: var(--radius-sm);
+    padding: 10px 14px; font-size: 13px; margin-bottom: 14px;
+  }
+
+  /* ── Add form ── */
+  .add-form {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 18px;
+    background: var(--bg2);
+  }
+  .form-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .form-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
+  .form-field label { font-size: 11px; color: var(--text2); font-weight: 500; }
+  .form-field input {
+    font-size: 13px; padding: 8px 11px;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-sm);
+    background: var(--bg); color: var(--text);
+    width: 100%;
+    transition: border-color .12s;
+  }
+  .form-field input:focus { outline: none; border-color: var(--accent-mid); }
+  .add-btn {
+    padding: 8px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--accent-mid);
+    background: var(--accent-light); color: var(--accent-dark);
+    cursor: pointer; font-size: 13px; font-weight: 500; white-space: nowrap;
+    align-self: flex-end; transition: background .12s;
+  }
+  .add-btn:hover { background: #DEDCFB; }
+  .expiry-hint { font-size: 11px; color: var(--text3); margin-top: 7px; min-height: 16px; }
+  .expiry-hint.soon   { color: var(--amber-text); }
+  .expiry-hint.urgent { color: var(--red-text); }
+
+  /* ── Pantry list ── */
+  .pantry-list { display: flex; flex-direction: column; gap: 6px; }
+  .p-item { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .p-item.editing { border-color: var(--accent-mid); }
+  .p-item-row { display: flex; align-items: center; gap: 9px; padding: 9px 11px; }
+  .p-item-dot { color: var(--text3); font-size: 14px; flex-shrink: 0; }
+  .p-item-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .p-item-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .p-item-bought { font-size: 10px; color: var(--text3); }
+  .p-item-exp { font-size: 11px; color: var(--text3); }
+  .p-item-exp.soon   { color: var(--amber-text); }
+  .p-item-exp.urgent { color: var(--red-text); }
+  .icon-btn {
+    background: transparent; border: none; color: var(--text3);
+    cursor: pointer; padding: 3px; border-radius: 4px;
+    display: flex; align-items: center; transition: color .1s, background .1s;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--bg3); }
+
+  /* ── Inline edit ── */
+  .edit-row {
+    display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+    padding: 9px 11px; border-top: 1px solid var(--accent-mid);
+    background: var(--accent-light);
+  }
+  .edit-row label { font-size: 11px; color: var(--accent-dark); font-weight: 500; white-space: nowrap; }
+  .edit-row input[type=date] {
+    font-size: 12px; padding: 5px 9px;
+    border: 1px solid var(--accent-mid); border-radius: var(--radius-sm);
+    background: var(--bg); color: var(--text);
+  }
+  .edit-row input[type=date]:focus { outline: none; border-color: var(--accent); }
+  .edit-preview { font-size: 11px; color: var(--accent-dark); flex: 1; }
+  .btn-save {
+    padding: 5px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--accent-mid); background: var(--accent);
+    color: #fff; cursor: pointer; font-size: 12px; font-weight: 500;
+    transition: background .12s;
+  }
+  .btn-save:hover { background: #534AB7; }
+  .btn-cancel {
+    padding: 5px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--text2); cursor: pointer; font-size: 12px;
+  }
+  .btn-cancel:hover { background: var(--bg3); }
+
+  /* ── Expiry tracker ── */
+  .expiry-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); margin-bottom: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Restrictions ── */
+  .restrict-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+  .r-tag {
+    font-size: 12px; padding: 4px 10px; border-radius: 20px;
+    background: var(--red-light); color: var(--red-text);
+    border: 1px solid #F7C1C1;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .r-tag button {
+    background: transparent; border: none; cursor: pointer;
+    color: var(--red-text); font-size: 15px; line-height: 1; padding: 0;
+  }
+
+  /* ── Modal ── */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .modal {
+    background: var(--bg); border-radius: var(--radius);
+    padding: 22px; width: 360px; max-width: 90vw;
+    border: 1px solid var(--border);
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,.15);
+  }
+  .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .modal-title { font-size: 16px; font-weight: 600; line-height: 1.3; flex: 1; padding-right: 10px; }
+  .modal-close {
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text2); font-size: 20px; line-height: 1; flex-shrink: 0;
+    padding: 0; transition: color .1s;
+  }
+  .modal-close:hover { color: var(--text); }
+  .nutrient-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .n-box { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg2); }
+  .n-label { font-size: 10px; color: var(--text2); margin-bottom: 2px; text-transform: uppercase; letter-spacing: .03em; }
+  .n-val { font-size: 16px; font-weight: 600; }
+  .n-unit { font-size: 11px; font-weight: 400; color: var(--text2); }
+  .ing-list { font-size: 12.5px; color: var(--text2); line-height: 1.9; margin-bottom: 14px; }
+  .steps-list { font-size: 12.5px; line-height: 1.8; padding-left: 18px; }
+  .steps-list li { margin-bottom: 5px; }
+
+  /* ── Input row ── */
+  .i-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .i-row input {
+    flex: 1; font-size: 13px; padding: 8px 11px;
+    border: 1px solid var(--border2); border-radius: var(--radius-sm);
+    background: var(--bg); color: var(--text);
+  }
+  .i-row input:focus { outline: none; border-color: var(--accent-mid); }
+  .i-row button {
+    padding: 8px 14px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border2); background: var(--bg);
+    color: var(--text); cursor: pointer; font-size: 13px; white-space: nowrap;
+    transition: background .12s;
+  }
+  .i-row button:hover { background: var(--bg2); }
+
+  /* ── Responsive ── */
+  @media (max-width: 640px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 12px; }
+    .logo { border: none; padding-bottom: 0; margin-bottom: 0; font-size: 15px; }
+    .nav { flex-direction: row; flex-wrap: wrap; }
+    .sidebar-footer { display: none; }
+    .nav-btn { padding: 6px 10px; font-size: 12px; }
+    .topbar { padding: 12px 16px 10px; }
+    .content { padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><span class="logo-icon">🍳</span> PantryChef</div>
+    <nav class="nav" id="nav" aria-label="Main navigation"></nav>
+    <div class="sidebar-footer" id="today-label"></div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <h1 id="page-title">Suggestions</h1>
+      <span class="pill" id="pantry-count"></span>
+    </header>
+    <main class="content" id="content" role="main"></main>
+  </div>
+</div>
+<div id="modal-root"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// DATE UTILS
+// ─────────────────────────────────────────────────────────────
+const TODAY = new Date();
+TODAY.setHours(0, 0, 0, 0);
+const TODAY_STR = TODAY.toISOString().split("T")[0];
+
+function daysUntil(dateStr) {
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  return Math.round((d - TODAY) / 86400000);
+}
+function expiryLabel(dateStr) {
+  const d = daysUntil(dateStr);
+  if (d < 0)   return { text: "Expired", cls: "urgent" };
+  if (d === 0) return { text: "Expires today", cls: "urgent" };
+  if (d === 1) return { text: "Expires tomorrow", cls: "urgent" };
+  if (d <= 5)  return { text: `Expires in ${d} days`, cls: "soon" };
+  return { text: `Expires ${new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`, cls: "" };
+}
+function fmtDate(s) {
+  return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// ─────────────────────────────────────────────────────────────
+// SHELF LIFE DATABASE (days from purchase)
+// ─────────────────────────────────────────────────────────────
+const SHELF_LIFE = {
+  "chicken":3,"chicken breast":3,"chicken thigh":3,"ground beef":2,"beef":4,"steak":4,
+  "pork":3,"pork chop":3,"bacon":7,"sausage":3,"lamb":3,"turkey":3,"duck":3,
+  "fish":2,"salmon":2,"tuna":2,"shrimp":2,"cod":2,"tilapia":2,"crab":2,"lobster":2,
+  "milk":7,"eggs":21,"butter":30,"cheese":14,"cheddar":21,"mozzarella":7,"parmesan":30,
+  "yogurt":10,"greek yogurt":10,"cream":7,"heavy cream":7,"sour cream":14,"cream cheese":14,"cottage cheese":7,
+  "spinach":5,"lettuce":7,"kale":7,"arugula":5,"basil":5,"cilantro":5,"parsley":7,"mint":7,
+  "dill":5,"chives":7,"thyme":10,"rosemary":14,
+  "tomato":5,"tomatoes":5,"cherry tomatoes":5,"strawberries":4,"blueberries":5,"raspberries":3,"blackberries":3,
+  "avocado":4,"banana":5,"peach":5,"plum":5,"mango":5,"grapes":7,"kiwi":7,"fig":3,
+  "apple":30,"apples":30,"oranges":21,"lemon":21,"lime":21,"cucumber":10,"zucchini":7,
+  "broccoli":7,"cauliflower":7,"bell pepper":10,"pepper":10,"celery":14,"carrot":21,"carrots":21,
+  "onion":30,"shallot":30,"garlic":90,"potato":30,"potatoes":30,"sweet potato":30,
+  "corn":3,"asparagus":4,"green beans":7,"peas":5,"mushrooms":7,"eggplant":7,"beets":14,"radish":14,
+  "bread":7,"tortillas":14,"pita":5,"bagel":5,"roll":4,
+  "pasta":730,"rice":730,"flour":180,"sugar":730,"salt":3650,"black pepper":1825,"paprika":1095,
+  "olive oil":365,"vegetable oil":365,"coconut oil":365,"vinegar":730,"soy sauce":365,"fish sauce":365,
+  "hot sauce":365,"worcestershire":365,"ketchup":365,"mustard":365,"mayonnaise":90,
+  "honey":3650,"maple syrup":730,"peanut butter":180,
+  "canned tomatoes":730,"tomato paste":730,"tomato sauce":730,
+  "canned beans":730,"canned chickpeas":730,"canned corn":730,
+  "beans":730,"lentils":730,"chickpeas":730,"oats":365,"cereal":180,"crackers":90,
+  "broth":730,"chicken broth":730,"vegetable broth":730,"coconut milk":730,"evaporated milk":730,
+  "baking powder":365,"baking soda":365,"yeast":120,"vanilla extract":1825,
+  "soy milk":7,"almond milk":7,"default":7
+};
+
+function getShelfDays(name) {
+  const lower = name.toLowerCase().trim();
+  if (SHELF_LIFE[lower] !== undefined) return SHELF_LIFE[lower];
+  let best = null, bestLen = 0;
+  for (const key of Object.keys(SHELF_LIFE)) {
+    if ((lower.includes(key) || key.includes(lower)) && key.length > bestLen) { best = key; bestLen = key.length; }
+  }
+  return best ? SHELF_LIFE[best] : SHELF_LIFE["default"];
+}
+function estimateExpiry(name, purchasedStr) {
+  const d = new Date(purchasedStr); d.setDate(d.getDate() + getShelfDays(name));
+  return d.toISOString().split("T")[0];
+}
+function shelfLifeText(name) {
+  const d = getShelfDays(name);
+  if (d >= 365) return `lasts ~${Math.round(d/365)} year${d>=730?"s":""}`;
+  if (d >= 30)  return `lasts ~${Math.round(d/30)} month${d>=60?"s":""}`;
+  return `lasts ~${d} day${d!==1?"s":""}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// STORAGE
+// ─────────────────────────────────────────────────────────────
+function loadData(key, def) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch { return def; }
+}
+function saveData(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────
+const DIET_CHIPS = ["All meals","Vegetarian","Vegan","High protein","Low carb","Gluten-free","Dairy-free","Drinks","Meal prep"];
+const TABS = [
+  { id:"suggest",  icon:"✨", label:"Suggestions" },
+  { id:"pantry",   icon:"🧺", label:"My pantry" },
+  { id:"expiry",   icon:"⏱️", label:"Expiring soon" },
+  { id:"restrict", icon:"🚫", label:"Restrictions" },
+  { id:"prefs",    icon:"⚙️", label:"Preferences" },
+];
+let state = {
+  tab:"suggest", pantry:[], restrictions:[], prefs:["All meals"],
+  recipes:[], loading:false, error:null, editingIdx:null, searchQuery:"",
+  pantryError:null, maxMissing:[],
+};
+
+// ─────────────────────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById("today-label").textContent =
+    "Today: " + TODAY.toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", year:"numeric" });
+  document.getElementById("pantry-count").textContent =
+    `${state.pantry.length} ingredient${state.pantry.length!==1?"s":""} in pantry`;
+  const expiringSoon = state.pantry.filter(i => { const d=daysUntil(i.expiry); return d>=0&&d<=5; }).length;
+  document.getElementById("nav").innerHTML = TABS.map(t => `
+    <button class="nav-btn${state.tab===t.id?" active":""}" onclick="switchTab('${t.id}')"
+            aria-current="${state.tab===t.id?"page":"false"}">
+      <span class="nav-icon" aria-hidden="true">${t.icon}</span>${t.label}
+      ${t.id==="expiry"&&expiringSoon>0?`<span class="nav-badge">${expiringSoon}</span>`:""}
+    </button>`).join("");
+  document.getElementById("page-title").textContent = TABS.find(t=>t.id===state.tab).label;
+  renderContent();
+}
+
+function renderContent() {
+  const c = document.getElementById("content");
+  if (state.tab==="suggest")  c.innerHTML = renderSuggest();
+  if (state.tab==="pantry")   c.innerHTML = renderPantry();
+  if (state.tab==="expiry")   c.innerHTML = renderExpiry();
+  if (state.tab==="restrict") c.innerHTML = renderRestrict();
+  if (state.tab==="prefs")    c.innerHTML = renderPrefs();
+}
+
+// ─── Suggestions ───
+function renderSuggest() {
+  const chips = DIET_CHIPS.map(c =>
+    `<button class="chip${state.prefs.includes(c)?" on":""}" onclick="togglePref('${c}')">${c}</button>`
+  ).join("");
+  const errorHtml = state.error ? `<div class="error-box" role="alert">⚠️ ${state.error}</div>` : "";
+
+  const filteredRecipes = state.maxMissing.length === 0
+    ? state.recipes
+    : state.recipes.filter(r => state.maxMissing.includes((r.missing_ingredients||[]).length));
+
+  let body = "";
+  if (state.loading) {
+    body = `<div class="loading-box" aria-live="polite"><div class="spinner"></div><span>Finding recipes for your pantry…</span></div>`;
+  } else if (!state.recipes.length) {
+    body = `<div class="empty"><span class="empty-icon" aria-hidden="true">👨‍🍳</span>${!state.pantry.length?"Add ingredients to your pantry to get started.":'Click "Get suggestions" to find matching recipes.'}</div>`;
+  } else if (!filteredRecipes.length) {
+    body = `<div class="empty"><span class="empty-icon" aria-hidden="true">🔎</span>No recipes match this filter.</div>`;
+  } else {
+    body = `<div class="cards">${filteredRecipes.map(r=>recipeCard(r,state.recipes.indexOf(r))).join("")}</div>`;
+  }
+  const can = state.pantry.length > 0 && !state.loading;
+  const missingChips = [0,1,2,3].map(n => {
+    const on = state.maxMissing.includes(n);
+    const label = n===0?"✓ Have all":`Missing ${n}`;
+    return `<button class="chip${on?" on":""}" onclick="toggleMaxMissing(${n})">${label}</button>`;
+  }).join("");
+  return `
+    <div class="chip-row" role="group" aria-label="Dietary filters">${chips}</div>
+    <div class="search-bar">
+      <div class="search-wrap">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input id="recipe-search" placeholder="Search for a dish… e.g. pasta, burrito, stir fry"
+               value="${state.searchQuery}" oninput="setSearch(this.value)"
+               onkeydown="if(event.key==='Enter'&&${can})getSuggestions()" autocomplete="off"/>
+        ${state.searchQuery?`<button class="search-clear" onclick="clearSearch()" aria-label="Clear search">×</button>`:""}
+      </div>
+      <button class="suggest-btn" onclick="getSuggestions()" ${!can?"disabled":""}>✨ Get suggestions</button>
+    </div>
+    <div class="suggest-bar">
+      <span class="section-label" style="margin:0">
+        ${state.recipes.length>0?`${filteredRecipes.length} of ${state.recipes.length} recipes${state.searchQuery?` for "${state.searchQuery}"`:""}` : ""}
+      </span>
+    </div>
+    <div class="chip-row" role="group" aria-label="Missing ingredients filter" style="margin-bottom:14px">${missingChips}</div>
+    ${errorHtml}${body}`;
+}
+
+function recipeCard(r, i) {
+  const missing=r.missing_ingredients||[], count=missing.length;
+  let tagClass="tag-full", tagText="✓ Have all";
+  if(count===1){tagClass="tag-one";tagText="Missing 1";}
+  if(count===2){tagClass="tag-two";tagText="Missing 2";}
+  if(count===3){tagClass="tag-three";tagText="Missing 3";}
+  const pct = Math.round((1-count/Math.max(r.total_ingredients||10,1))*100);
+  const fillColor = count===0?"#1D9E75":count===1?"#378ADD":count===2?"#EF9F27":"#E24B4A";
+  const n = r.nutrition||{};
+  return `
+    <article class="card" onclick="openRecipe(${i})" role="button" tabindex="0"
+             onkeydown="if(event.key==='Enter'||event.key===' ')openRecipe(${i})"
+             aria-label="Recipe: ${r.name}">
+      <div class="card-top">
+        <span class="card-name">${r.name}</span>
+        <span class="match-tag ${tagClass}">${tagText}</span>
+      </div>
+      <div class="missing-note">${count>0?`Need: ${missing.join(", ")}`:"Ready to make"}</div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${fillColor}"></div></div>
+      <div class="macros">
+        <span class="macro">${n.calories||"?"} kcal</span>
+        <span class="macro">${n.protein||"?"}g protein</span>
+        <span class="macro">${n.carbs||"?"}g carbs</span>
+        <span class="macro">${n.fat||"?"}g fat</span>
+      </div>
+    </article>`;
+}
+
+// ─── Pantry ───
+function renderPantry() {
+  const items = state.pantry.map((item, i) => {
+    const el = expiryLabel(item.expiry);
+    const isEditing = state.editingIdx === i;
+    const editRow = isEditing ? `
+      <div class="edit-row">
+        <label for="edit-date-${i}">Purchased</label>
+        <input type="date" id="edit-date-${i}" value="${item.purchased}" max="${TODAY_STR}" oninput="previewEdit(${i},this.value)"/>
+        <span class="edit-preview" id="edit-preview-${i}"></span>
+        <button class="btn-save" onclick="saveEdit(${i})">Save</button>
+        <button class="btn-cancel" onclick="cancelEdit()">Cancel</button>
+      </div>` : "";
+    return `
+      <div class="p-item${isEditing?" editing":""}">
+        <div class="p-item-row">
+          <span class="p-item-dot" aria-hidden="true">●</span>
+          <span class="p-item-name">${item.name}</span>
+          <div class="p-item-meta">
+            <span class="p-item-bought">Bought ${fmtDate(item.purchased)}</span>
+            <span class="p-item-exp ${el.cls}">${el.text}</span>
+          </div>
+          <button class="icon-btn" onclick="${isEditing?"cancelEdit()":`startEdit(${i})`}"
+                  aria-label="${isEditing?"Cancel edit":`Edit purchase date for ${item.name}`}">
+            ${isEditing?"✕":"✏️"}
+          </button>
+          <button class="icon-btn" onclick="removeIngredient(${i})" aria-label="Remove ${item.name}">🗑️</button>
+        </div>
+        ${editRow}
+      </div>`;
+  }).join("");
+  return `
+    <div class="add-form">
+      <div class="section-label" style="margin-bottom:11px">Add an ingredient</div>
+      <div class="form-row">
+        <div class="form-field" style="flex:2">
+          <label for="ing-name">Ingredient</label>
+          <input id="ing-name" placeholder="e.g. chicken breast, spinach, garlic…"
+                 oninput="updateHint()" onkeydown="if(event.key==='Enter')addIngredient()" autocomplete="off"/>
+        </div>
+        <div class="form-field" style="max-width:170px">
+          <label for="ing-date">Date purchased</label>
+          <input id="ing-date" type="date" value="${TODAY_STR}" max="${TODAY_STR}" oninput="updateHint()"/>
+        </div>
+        <button class="add-btn" onclick="addIngredient()">+ Add</button>
+      </div>
+      <div id="expiry-hint" class="expiry-hint"></div>
+      ${state.pantryError?`<div id="pantry-error" class="error-box" role="alert" style="margin-top:8px;margin-bottom:0">⚠️ ${state.pantryError}</div>`:""}
+    </div>
+    <div class="section-label">Pantry (${state.pantry.length} items)</div>
+    <div class="pantry-list" role="list">
+      ${state.pantry.length===0
+        ?`<div class="empty"><span class="empty-icon" aria-hidden="true">🧺</span>No ingredients yet. Add some above.</div>`
+        :items}
+    </div>`;
+}
+
+// ─── Expiry ───
+function renderExpiry() {
+  if (!state.pantry.length) return `<div class="empty"><span class="empty-icon" aria-hidden="true">⏱️</span>Add ingredients to track expiry.</div>`;
+  const sorted = [...state.pantry].sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
+  const urgent = sorted.filter(i=>daysUntil(i.expiry)<=2);
+  const soon   = sorted.filter(i=>daysUntil(i.expiry)>2&&daysUntil(i.expiry)<=7);
+  const fine   = sorted.filter(i=>daysUntil(i.expiry)>7);
+  function section(title, items, color) {
+    if (!items.length) return "";
+    return `<div class="section-label">${title}</div>` +
+      items.map(item => {
+        const el = expiryLabel(item.expiry);
+        return `<div class="expiry-item">
+          <span class="dot" style="background:${color}"></span>
+          <span style="flex:1;font-size:13px;font-weight:500">${item.name}</span>
+          <span style="font-size:11px;color:var(--text3);margin-right:12px">Bought ${fmtDate(item.purchased)}</span>
+          <span style="font-size:12px;color:${color};font-weight:500">${el.text}</span>
+        </div>`;
+      }).join("");
+  }
+  return section("🔴 Use immediately",urgent,"#E24B4A")
+       + section("🟡 Use soon",soon,"#EF9F27")
+       + section("🟢 Still fresh",fine,"#1D9E75");
+}
+
+// ─── Restrictions ───
+function renderRestrict() {
+  return `
+    <div class="section-label">Allergies &amp; dislikes</div>
+    <p style="font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+      Recipes containing these ingredients will never be suggested.
+    </p>
+    <div class="restrict-tags">
+      ${state.restrictions.map((r,i)=>`<span class="r-tag">${r}<button onclick="removeRestriction(${i})" aria-label="Remove ${r}">×</button></span>`).join("")}
+    </div>
+    <div class="i-row">
+      <input id="restrict-input" placeholder="e.g. peanuts, shellfish, cilantro…" onkeydown="if(event.key==='Enter')addRestriction()"/>
+      <button onclick="addRestriction()">+ Add</button>
+    </div>
+    <p style="font-size:11px;color:var(--text3)">Tip: you can add multiple at once separated by commas.</p>`;
+}
+
+// ─── Preferences ───
+function renderPrefs() {
+  const diets = ["Vegetarian","Vegan","High protein","Low carb","Gluten-free","Dairy-free","Keto","Paleo"];
+  const types = ["Breakfast","Lunch","Dinner","Snacks","Drinks","Meal prep","Quick (under 30 min)","Budget-friendly"];
+  function group(title, items) {
+    return `<div class="section-label">${title}</div>
+      <div class="chip-row" style="margin-bottom:18px">
+        ${items.map(c=>`<button class="chip${state.prefs.includes(c)?" on":""}" onclick="togglePref('${c}')">${c}</button>`).join("")}
+      </div>`;
+  }
+  return group("Dietary preferences",diets) + group("Meal types",types)
+    + `<p style="font-size:12px;color:var(--text3)">These preferences are sent to the AI when generating suggestions.</p>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ACTIONS
+// ─────────────────────────────────────────────────────────────
+function switchTab(t) { state.editingIdx=null; state.tab=t; render(); }
+
+function togglePref(p) {
+  if (p==="All meals") { state.prefs=["All meals"]; }
+  else {
+    state.prefs = state.prefs.filter(x=>x!=="All meals");
+    if (state.prefs.includes(p)) state.prefs=state.prefs.filter(x=>x!==p);
+    else state.prefs.push(p);
+    if (!state.prefs.length) state.prefs=["All meals"];
+  }
+  saveData("pc-prefs",state.prefs); render();
+}
+
+function setSearch(val) {
+  state.searchQuery = val;
+  const searchInput = document.getElementById("recipe-search");
+  const cursorPos = searchInput ? searchInput.selectionStart : 0;
+  renderContent();
+  const newInput = document.getElementById("recipe-search");
+  if (newInput) { newInput.focus(); newInput.setSelectionRange(cursorPos,cursorPos); }
+}
+
+function clearSearch() {
+  state.searchQuery=""; state.recipes=[]; state.error=null; render();
+  setTimeout(()=>{ const el=document.getElementById("recipe-search"); if(el)el.focus(); },0);
+}
+
+function toggleMaxMissing(n) {
+  state.maxMissing = state.maxMissing.includes(n)
+    ? state.maxMissing.filter(x => x !== n)
+    : [...state.maxMissing, n].sort((a,b) => a-b);
+  saveData("pc-maxmissing", state.maxMissing); renderContent();
+}
+
+function updateHint() {
+  if (state.pantryError) { state.pantryError=null; const eb=document.getElementById("pantry-error"); if(eb)eb.remove(); }
+  const name=(document.getElementById("ing-name")||{}).value||"";
+  const date=(document.getElementById("ing-date")||{}).value||TODAY_STR;
+  const hint=document.getElementById("expiry-hint");
+  if (!hint) return;
+  if (!name.trim()) { hint.textContent=""; hint.className="expiry-hint"; return; }
+  const expiry=estimateExpiry(name,date);
+  const el=expiryLabel(expiry);
+  hint.className="expiry-hint"+(el.cls?" "+el.cls:"");
+  hint.textContent=`Estimated expiry: ${fmtDate(expiry)} — ${shelfLifeText(name)}`;
+}
+
+function addIngredient() {
+  const nameEl=document.getElementById("ing-name");
+  const dateEl=document.getElementById("ing-date");
+  const name=nameEl.value.trim(), purchased=dateEl.value||TODAY_STR;
+  if (!name) return;
+  const exists = state.pantry.some(i => i.name.toLowerCase() === name.toLowerCase());
+  if (exists) {
+    state.pantryError = `"${name}" is already in your pantry.`;
+    renderContent();
+    setTimeout(()=>{ const el=document.getElementById("ing-name"); if(el)el.focus(); },0);
+    return;
+  }
+  state.pantryError = null;
+  state.pantry.push({name, purchased, expiry:estimateExpiry(name,purchased), added:TODAY_STR});
+  nameEl.value=""; dateEl.value=TODAY_STR;
+  const hint=document.getElementById("expiry-hint");
+  if (hint) { hint.textContent=""; hint.className="expiry-hint"; }
+  saveData("pc-pantry",state.pantry); render();
+  setTimeout(()=>{ const el=document.getElementById("ing-name"); if(el)el.focus(); },0);
+}
+
+function removeIngredient(i) {
+  state.pantry.splice(i,1);
+  if (state.editingIdx===i) state.editingIdx=null;
+  saveData("pc-pantry",state.pantry); render();
+}
+
+function startEdit(i) {
+  state.editingIdx=i; render();
+  setTimeout(()=>{ const el=document.getElementById(`edit-date-${i}`); if(el){el.focus();previewEdit(i,el.value);} },0);
+}
+function cancelEdit() { state.editingIdx=null; render(); }
+function previewEdit(i, val) {
+  const p=document.getElementById(`edit-preview-${i}`);
+  if (!p||!val) return;
+  p.textContent=`→ expires ${fmtDate(estimateExpiry(state.pantry[i].name,val))}`;
+}
+function saveEdit(i) {
+  const input=document.getElementById(`edit-date-${i}`);
+  if (!input||!input.value) return;
+  state.pantry[i].purchased=input.value;
+  state.pantry[i].expiry=estimateExpiry(state.pantry[i].name,input.value);
+  state.editingIdx=null;
+  saveData("pc-pantry",state.pantry); render();
+}
+
+function addRestriction() {
+  const el=document.getElementById("restrict-input");
+  const val=el.value.trim(); if (!val) return;
+  val.split(",").map(s=>s.trim()).filter(Boolean).forEach(s=>{ if(!state.restrictions.includes(s))state.restrictions.push(s); });
+  el.value=""; saveData("pc-restrictions",state.restrictions); render();
+}
+function removeRestriction(i) {
+  state.restrictions.splice(i,1); saveData("pc-restrictions",state.restrictions); render();
+}
+
+// ─────────────────────────────────────────────────────────────
+// GET SUGGESTIONS
+// ─────────────────────────────────────────────────────────────
+async function getSuggestions() {
+  if (state.loading||!state.pantry.length) return;
+  state.loading=true; state.error=null; state.recipes=[]; render();
+
+  const pantryNames  = state.pantry.map(i=>i.name);
+  const expiringSoon = state.pantry.filter(i=>daysUntil(i.expiry)<=3).map(i=>i.name);
+  const activePrefs  = state.prefs.filter(p=>p!=="All meals");
+  const searchHint   = state.searchQuery.trim()
+    ? `The user is specifically looking for: "${state.searchQuery.trim()}". Prioritize recipes matching this search, adapted to use the available pantry ingredients as much as possible.`
+    : "Suggest a varied mix of meals.";
+
+  const prompt = `You are a recipe suggestion engine. The user has these ingredients: ${pantryNames.join(", ")}.
+Expiring soon — prioritize using these: ${expiringSoon.length?expiringSoon.join(", "):"none"}.
+Dietary restrictions — never include these: ${state.restrictions.length?state.restrictions.join(", "):"none"}.
+User preferences: ${activePrefs.length?activePrefs.join(", "):"no specific preference"}.
+Today's date: ${TODAY_STR}.
+${searchHint}
+
+Return exactly 6 recipe suggestions as a JSON array only — no markdown fences, no explanation, just the raw JSON:
+[
+  {
+    "name": "Recipe name",
+    "missing_ingredients": ["ingredient1", "ingredient2"],
+    "total_ingredients": 8,
+    "ingredients": [
+      { "name": "ingredient1", "amount": "2 cups" },
+      { "name": "ingredient2", "amount": "1 tbsp" }
+    ],
+    "steps": [
+      "Step 1: Do only one action here, e.g. Bring a large pot of salted water to a boil.",
+      "Step 2: Do only one action here, e.g. Heat olive oil in a pan over medium heat.",
+      "Step 3: Do only one action here, e.g. Add garlic and cook for 1 minute until fragrant.",
+      "Step 4: Continue with remaining actions as separate steps."
+    ],
+    "nutrition": {
+      "calories": 450, "protein": 30, "carbs": 45, "fat": 12,
+      "fiber": 5, "sugar": 8, "sodium": 600,
+      "vitamin_c": 15, "iron": 3, "calcium": 80
+    }
+  }
+]
+Rules:
+- Each recipe may have at most 3 missing ingredients.
+- Sort results: fewest missing ingredients first.
+- Use expiring ingredients in at least 2 of the 6 recipes.
+- Strictly exclude any ingredient in the restrictions list.
+- Respect all user preferences.
+- IMPORTANT: "steps" must be an array of 4-8 separate strings. Each string is ONE single action only. Never combine multiple actions into one step.`;
+
+  try {
+    state.recipes = await callAI(prompt);
+    if (!Array.isArray(state.recipes)) throw new Error("Unexpected response format");
+  } catch(e) {
+    state.error = e.message || "Something went wrong. Please try again.";
+    state.recipes = [];
+  }
+  state.loading=false; render();
+}
+
+// ─────────────────────────────────────────────────────────────
+// RECIPE MODAL
+// ─────────────────────────────────────────────────────────────
+function openRecipe(i) {
+  const r=state.recipes[i]; if (!r) return;
+  const n=r.nutrition||{};
+  const nutrients=[
+    {label:"Calories",val:n.calories,unit:"kcal"},{label:"Protein",val:n.protein,unit:"g"},
+    {label:"Carbs",val:n.carbs,unit:"g"},{label:"Fat",val:n.fat,unit:"g"},
+    {label:"Fiber",val:n.fiber,unit:"g"},{label:"Sugar",val:n.sugar,unit:"g"},
+    {label:"Sodium",val:n.sodium,unit:"mg"},{label:"Vitamin C",val:n.vitamin_c,unit:"mg"},
+    {label:"Iron",val:n.iron,unit:"mg"},{label:"Calcium",val:n.calcium,unit:"mg"},
+  ];
+  const missing=r.missing_ingredients||[];
+  document.getElementById("modal-root").innerHTML=`
+    <div class="overlay" onclick="if(event.target===this)closeModal()" role="dialog" aria-modal="true" aria-label="${r.name}">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 class="modal-title">${r.name}</h2>
+          <button class="modal-close" onclick="closeModal()" aria-label="Close recipe">×</button>
+        </div>
+        ${missing.length>0?`<div style="background:var(--amber-light);color:var(--amber-text);padding:8px 12px;border-radius:var(--radius-sm);font-size:12.5px;margin-bottom:14px">Still need: ${missing.join(", ")}</div>`:""}
+        <div class="section-label">Nutrition per serving</div>
+        <div class="nutrient-grid" style="margin-bottom:16px">
+          ${nutrients.map(x=>`<div class="n-box"><div class="n-label">${x.label}</div><div class="n-val">${x.val??"—"}<span class="n-unit"> ${x.unit}</span></div></div>`).join("")}
+        </div>
+        <div class="section-label">Ingredients</div>
+        <div class="ing-list">
+          ${(r.ingredients||[]).map(ing=>{
+            const isMissing=(r.missing_ingredients||[]).some(m=>m.toLowerCase()===ing.name.toLowerCase());
+            return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border)">
+              <span style="${isMissing?"color:var(--amber-text)":""}">${isMissing?"⚠ ":""}${ing.name}</span>
+              <span style="font-weight:500;color:var(--text);margin-left:12px;white-space:nowrap">${ing.amount}</span>
+            </div>`;
+          }).join("")}
+        </div>
+        <div class="section-label">Steps</div>
+        <ol class="steps-list">${(r.steps||[]).map(s=>`<li>${s}</li>`).join("")}</ol>
+      </div>
+    </div>`;
+}
+function closeModal() { document.getElementById("modal-root").innerHTML=""; }
+document.addEventListener("keydown", e=>{ if(e.key==="Escape")closeModal(); });
+
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+function init() {
+  state.pantry       = loadData("pc-pantry",       []);
+  state.restrictions = loadData("pc-restrictions", []);
+  state.prefs        = loadData("pc-prefs",        ["All meals"]);
+  const _mm = loadData("pc-maxmissing", []);
+  state.maxMissing = Array.isArray(_mm) ? _mm : [];
+  state.pantry       = state.pantry.map(i=>({...i, purchased:i.purchased||TODAY_STR}));
+  render();
+}
+init();
+</script>
+</body>
+</html>
