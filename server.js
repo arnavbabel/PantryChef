@@ -35,8 +35,10 @@ app.post("/api/suggest", async (req, res) => {
         "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
         temperature: 0.7,
+        max_tokens: 4000,
+        response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -61,6 +63,6 @@ app.get("*", (req, res) => {
   res.sendFile(join(__dirname, "public", "index.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`PantryChef running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`PantryChef running on port ${PORT}`);
 });

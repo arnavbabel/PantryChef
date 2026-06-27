@@ -13,7 +13,7 @@
   //
   //  No configuration needed here. Set GROQ_API_KEY in your .env
   // ─────────────────────────────────────────────────────────────
-  async function callAI(prompt) {
+  async function callAI(prompt, attempt = 1) {
     const res = await fetch("/api/suggest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,7 +21,16 @@
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    return JSON.parse(data.text.replace(/```json|```/g, "").trim());
+    const cleaned = data.text.replace(/```json|```/g, "").trim();
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {
+      if (attempt < 2) {
+        // Model occasionally returns malformed/truncated JSON — retry once.
+        return callAI(prompt, attempt + 1);
+      }
+      throw new Error("The AI returned malformed data. Please try again.");
+    }
   }
 </script>
 
@@ -629,6 +638,13 @@ function renderSuggest() {
     ${errorHtml}${body}`;
 }
 
+function toggleMaxMissing(n) {
+  state.maxMissing = state.maxMissing.includes(n)
+    ? state.maxMissing.filter(x => x !== n)
+    : [...state.maxMissing, n].sort((a,b) => a-b);
+  saveData("pc-maxmissing", state.maxMissing); renderContent();
+}
+
 function recipeCard(r, i) {
   const missing=r.missing_ingredients||[], count=missing.length;
   let tagClass="tag-full", tagText="✓ Have all";
@@ -800,13 +816,6 @@ function clearSearch() {
   setTimeout(()=>{ const el=document.getElementById("recipe-search"); if(el)el.focus(); },0);
 }
 
-function toggleMaxMissing(n) {
-  state.maxMissing = state.maxMissing.includes(n)
-    ? state.maxMissing.filter(x => x !== n)
-    : [...state.maxMissing, n].sort((a,b) => a-b);
-  saveData("pc-maxmissing", state.maxMissing); renderContent();
-}
-
 function updateHint() {
   if (state.pantryError) { state.pantryError=null; const eb=document.getElementById("pantry-error"); if(eb)eb.remove(); }
   const name=(document.getElementById("ing-name")||{}).value||"";
@@ -897,40 +906,45 @@ User preferences: ${activePrefs.length?activePrefs.join(", "):"no specific prefe
 Today's date: ${TODAY_STR}.
 ${searchHint}
 
-Return exactly 6 recipe suggestions as a JSON array only — no markdown fences, no explanation, just the raw JSON:
-[
-  {
-    "name": "Recipe name",
-    "missing_ingredients": ["ingredient1", "ingredient2"],
-    "total_ingredients": 8,
-    "ingredients": [
-      { "name": "ingredient1", "amount": "2 cups" },
-      { "name": "ingredient2", "amount": "1 tbsp" }
-    ],
-    "steps": [
-      "Step 1: Do only one action here, e.g. Bring a large pot of salted water to a boil.",
-      "Step 2: Do only one action here, e.g. Heat olive oil in a pan over medium heat.",
-      "Step 3: Do only one action here, e.g. Add garlic and cook for 1 minute until fragrant.",
-      "Step 4: Continue with remaining actions as separate steps."
-    ],
-    "nutrition": {
-      "calories": 450, "protein": 30, "carbs": 45, "fat": 12,
-      "fiber": 5, "sugar": 8, "sodium": 600,
-      "vitamin_c": 15, "iron": 3, "calcium": 80
+Return exactly 6 recipe suggestions as a single JSON object — no markdown fences, no explanation, just the raw JSON:
+{
+  "recipes": [
+    {
+      "name": "Recipe name",
+      "missing_ingredients": ["ingredient1", "ingredient2"],
+      "total_ingredients": 8,
+      "ingredients": [
+        { "name": "ingredient1", "amount": "2 cups" },
+        { "name": "ingredient2", "amount": "1 tbsp" }
+      ],
+      "steps": [
+        "Step 1: Do only one action here, e.g. Bring a large pot of salted water to a boil.",
+        "Step 2: Do only one action here, e.g. Heat olive oil in a pan over medium heat.",
+        "Step 3: Do only one action here, e.g. Add garlic and cook for 1 minute until fragrant.",
+        "Step 4: Continue with remaining actions as separate steps."
+      ],
+      "nutrition": {
+        "calories": 450, "protein": 30, "carbs": 45, "fat": 12,
+        "fiber": 5, "sugar": 8, "sodium": 600,
+        "vitamin_c": 15, "iron": 3, "calcium": 80
+      }
     }
-  }
-]
+  ]
+}
 Rules:
 - Each recipe may have at most 3 missing ingredients.
 - Sort results: fewest missing ingredients first.
 - Use expiring ingredients in at least 2 of the 6 recipes.
 - Strictly exclude any ingredient in the restrictions list.
 - Respect all user preferences.
-- IMPORTANT: "steps" must be an array of 4-8 separate strings. Each string is ONE single action only. Never combine multiple actions into one step.`;
+- IMPORTANT: "steps" must be an array of 4-8 separate strings. Each string is ONE single action only. Never combine multiple actions into one step.
+- IMPORTANT: Output must be valid JSON. Escape any quotes inside strings. Do not truncate.`;
 
   try {
-    state.recipes = await callAI(prompt);
-    if (!Array.isArray(state.recipes)) throw new Error("Unexpected response format");
+    const result = await callAI(prompt);
+    const recipes = Array.isArray(result) ? result : result.recipes;
+    if (!Array.isArray(recipes)) throw new Error("Unexpected response format");
+    state.recipes = recipes;
   } catch(e) {
     state.error = e.message || "Something went wrong. Please try again.";
     state.recipes = [];
